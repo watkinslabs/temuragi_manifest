@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temuragi-ingress
+  namespace: temuragi
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: temuragi.watkinslabs.com
+    http:
+      paths:
+      # All /v2 routes go to backend
+      - path: /v2
+        pathType: Prefix
+        backend:
+          service:
+            name: temuragi-backend
+            port:
+              number: 5000
+      # Everything else goes to static
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: temuragi-static
+            port:
+              number: 80

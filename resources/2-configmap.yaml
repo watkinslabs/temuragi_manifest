@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temuragi-config
+  namespace: temuragi
+data:
+  api_base_url: "https://temuragi.watkinslabs.com/v2/api"
+  environment: "production"

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temuragi-backend
+  namespace: temuragi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temuragi-backend
+  template:
+    metadata:
+      labels:
+        app: temuragi-backend
+    spec:
+      containers:
+      - name: backend
+        image: watkinslabs/temuragi_backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: TEMURAGI_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_USER
+        - name: TEMURAGI_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PASSWORD
+        - name: TEMURAGI_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_HOST
+        - name: TEMURAGI_DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PORT
+        - name: TEMURAGI_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_NAME
+        - name: TEMURAGI_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_SECRET_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: config
+        configMap:
+          name: temuragi-backend-config

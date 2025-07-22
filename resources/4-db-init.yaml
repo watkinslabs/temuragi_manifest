@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temuragi-db-init
+  namespace: temuragi
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres.temuragi.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+      - name: db-init
+        image: watkinslabs/temuragi_init:latest
+        env:
+        - name: TEMURAGI_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_USER
+        - name: TEMURAGI_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PASSWORD
+        - name: TEMURAGI_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_HOST
+        - name: TEMURAGI_DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PORT
+        - name: TEMURAGI_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_NAME
+        - name: TEMURAGI_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_SECRET_KEY

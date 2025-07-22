@@ -1,0 +1,399 @@
+## Florted: 2025-07-22 15:53:39
+## Directory Tree
+k8s/
+├── resources/
+│   ├── 0-namespace.yaml
+│   ├── 1-pg-secrets.yaml
+│   ├── 2-configmap.yaml
+│   ├── 3-postgres-deployment.yaml
+│   ├── 3-postgres-service.yaml
+│   ├── 4-db-init.yaml
+│   ├── 5-static-deployment.yaml
+│   ├── 5-static-service.yaml
+│   ├── 6-backend-deployment.yaml
+│   ├── 6-backend-service.yaml
+│   └── 7-ingress.yaml
+└── dbg.yaml
+
+## File Data
+--- File: dbg.yaml
+--- Characters: 1,011
+--- Token Count: 143
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-shell
+  namespace: temuragi
+spec:
+  containers:
+  - name: debug-shell
+    image: busybox:1.35
+    command: ["sleep", "3600"]
+    env:
+    - name: TEMURAGI_DB_USER
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_DB_USER
+    - name: TEMURAGI_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_DB_PASSWORD
+    - name: TEMURAGI_DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_DB_HOST
+    - name: TEMURAGI_DB_PORT
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_DB_PORT
+    - name: TEMURAGI_DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_DB_NAME
+    - name: TEMURAGI_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: temuragi-secret
+          key: TEMURAGI_SECRET_KEY
+  restartPolicy: Never
+
+--- File: resources/0-namespace.yaml
+--- Characters: 57
+--- Token Count: 11
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: temuragi
+
+--- File: resources/1-pg-secrets.yaml
+--- Characters: 381
+--- Token Count: 51
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temuragi-secret
+  namespace: temuragi
+type: Opaque
+stringData:
+  TEMURAGI_DB_USER: temuragi_user
+  TEMURAGI_DB_PASSWORD: fjk3490qnfmkldsavnmi934qgj03598340-jfklfdsgt34rt23rfdas
+  TEMURAGI_DB_HOST: postgres.temuragi.svc.cluster.local
+  TEMURAGI_DB_PORT: "5432"
+  TEMURAGI_DB_NAME: temuragi_db
+  TEMURAGI_SECRET_KEY: your_secret_key_here
+
+--- File: resources/2-configmap.yaml
+--- Characters: 178
+--- Token Count: 39
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temuragi-config
+  namespace: temuragi
+data:
+  api_base_url: "https://temuragi.watkinslabs.com/v2/api"
+  environment: "production"
+
+--- File: resources/3-postgres-deployment.yaml
+--- Characters: 1,349
+--- Token Count: 193
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: temuragi
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres-db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres-password
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      storageClassName: local-path
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+--- File: resources/3-postgres-service.yaml
+--- Characters: 176
+--- Token Count: 33
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: temuragi
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres
+
+--- File: resources/4-db-init.yaml
+--- Characters: 1,387
+--- Token Count: 198
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temuragi-db-init
+  namespace: temuragi
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres.temuragi.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+      - name: db-init
+        image: watkinslabs/temuragi_init:latest
+        env:
+        - name: TEMURAGI_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_USER
+        - name: TEMURAGI_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PASSWORD
+        - name: TEMURAGI_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_HOST
+        - name: TEMURAGI_DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PORT
+        - name: TEMURAGI_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_NAME
+        - name: TEMURAGI_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_SECRET_KEY
+
+--- File: resources/5-static-deployment.yaml
+--- Characters: 538
+--- Token Count: 86
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temuragi-static
+  namespace: temuragi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temuragi-static
+  template:
+    metadata:
+      labels:
+        app: temuragi-static
+    spec:
+      containers:
+      - name: static
+        image: watkinslabs/temuragi_static:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+--- File: resources/5-static-service.yaml
+--- Characters: 186
+--- Token Count: 37
+apiVersion: v1
+kind: Service
+metadata:
+  name: temuragi-static
+  namespace: temuragi
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: temuragi-static
+
+--- File: resources/6-backend-deployment.yaml
+--- Characters: 1,581
+--- Token Count: 199
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temuragi-backend
+  namespace: temuragi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temuragi-backend
+  template:
+    metadata:
+      labels:
+        app: temuragi-backend
+    spec:
+      containers:
+      - name: backend
+        image: watkinslabs/temuragi_backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: TEMURAGI_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_USER
+        - name: TEMURAGI_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PASSWORD
+        - name: TEMURAGI_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_HOST
+        - name: TEMURAGI_DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_PORT
+        - name: TEMURAGI_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_DB_NAME
+        - name: TEMURAGI_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: temuragi-secret
+              key: TEMURAGI_SECRET_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: config
+        configMap:
+          name: temuragi-backend-config
+
+--- File: resources/6-backend-service.yaml
+--- Characters: 192
+--- Token Count: 37
+apiVersion: v1
+kind: Service
+metadata:
+  name: temuragi-backend
+  namespace: temuragi
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+  selector:
+    app: temuragi-backend
+
+--- File: resources/7-ingress.yaml
+--- Characters: 591
+--- Token Count: 98
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: temuragi-ingress
+  namespace: temuragi
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: temuragi.watkinslabs.com
+    http:
+      paths:
+      # All /v2 routes go to backend
+      - path: /v2
+        pathType: Prefix
+        backend:
+          service:
+            name: temuragi-backend
+            port:
+              number: 5000
+      # Everything else goes to static
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: temuragi-static
+            port:
+              number: 80
+
+
+## Concatenation Summary
+Files processed: 12
+Files skipped: 0
+Total characters: 7,627
+Total tokens: 1,125
+
+Completed at: 2025-07-22 15:53:39
+
